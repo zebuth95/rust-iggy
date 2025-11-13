@@ -1,0 +1,12 @@
+{
+  "server_address": "127.0.0.1:8090",
+  "username": "iggy",
+  "password": "iggy",
+  "stream_id": 1,
+  "topic_id": 1,
+  "partition_id": 1,
+  "polling_interval": "500ms",
+  "batch_limit": 5,
+  "messages_per_batch": 10
+}
+// Now let me create a README file to document the enhanced POC:
