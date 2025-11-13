@@ -1,6 +1,6 @@
 services:
   iggy:
-    image: iggyrs/iggy:latest
+    image: apache/iggy:0.5.0
     container_name: iggy
     restart: unless-stopped
     cap_add:
