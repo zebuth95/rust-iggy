@@ -1,44 +1,64 @@
-use iggy::client::{Client, MessageClient, UserClient};
-use iggy::clients::client::IggyClient;
-use iggy::consumer::Consumer;
-use iggy::messages::poll_messages::PollingStrategy;
-use iggy::models::messages::PolledMessage;
-use iggy::users::defaults::{DEFAULT_ROOT_PASSWORD, DEFAULT_ROOT_USERNAME};
+use iggy::prelude::*;
+use std::env;
 use std::error::Error;
-use std::time::Duration;
+use std::str::FromStr;
 use tokio::time::sleep;
 use tracing::info;
+use tracing_subscriber::Registry;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 const STREAM_ID: u32 = 1;
 const TOPIC_ID: u32 = 1;
 const PARTITION_ID: u32 = 1;
+const BATCHES_LIMIT: u32 = 5;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt::init();
-    let client = IggyClient::default();
+    Registry::default()
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or(tracing_subscriber::EnvFilter::new("INFO")),
+        )
+        .init();
+    let client = IggyClientBuilder::new()
+        .with_tcp()
+        .with_server_address(get_tcp_server_addr())
+        .build()?;
+
+    // Or, instead of above lines, you can just use below code, which will create a Iggy
+    // TCP client with default config (default server address for TCP is 127.0.0.1:8090):
+    // let client = IggyClient::default();
+
     client.connect().await?;
     client
         .login_user(DEFAULT_ROOT_USERNAME, DEFAULT_ROOT_PASSWORD)
         .await?;
+
     consume_messages(&client).await
 }
 
-async fn consume_messages(client: &IggyClient) -> Result<(), Box<dyn Error>> {
-    let interval = Duration::from_millis(500);
+async fn consume_messages(client: &dyn Client) -> Result<(), Box<dyn Error>> {
+    let interval = IggyDuration::from_str("500ms")?;
     info!(
-        "Messages will be consumed from stream: {}, topic: {}, partition: {} with interval {} ms.",
+        "Messages will be consumed from stream: {}, topic: {}, partition: {} with interval {}.",
         STREAM_ID,
         TOPIC_ID,
         PARTITION_ID,
-        interval.as_millis()
+        interval.as_human_time_string()
     );
 
     let mut offset = 0;
     let messages_per_batch = 10;
+    let mut consumed_batches = 0;
     let consumer = Consumer::default();
-    let mut strategy = PollingStrategy::offset(offset);
     loop {
+        if consumed_batches == BATCHES_LIMIT {
+            info!("Consumed {consumed_batches} batches of messages, exiting.");
+            return Ok(());
+        }
+
         let polled_messages = client
             .poll_messages(
                 &STREAM_ID.try_into()?,
@@ -53,25 +73,54 @@ async fn consume_messages(client: &IggyClient) -> Result<(), Box<dyn Error>> {
 
         if polled_messages.messages.is_empty() {
             info!("No messages found.");
-            sleep(interval).await;
+            sleep(interval.get_duration()).await;
             continue;
         }
 
         offset += polled_messages.messages.len() as u64;
-        strategy.set_value(offset);
         for message in polled_messages.messages {
             handle_message(&message)?;
         }
-        sleep(interval).await;
+        consumed_batches += 1;
+        sleep(interval.get_duration()).await;
     }
 }
 
-fn handle_message(message: &PolledMessage) -> Result<(), Box<dyn Error>> {
+fn handle_message(message: &IggyMessage) -> Result<(), Box<dyn Error>> {
     // The payload can be of any type as it is a raw byte array. In this case it's a simple string.
     let payload = std::str::from_utf8(&message.payload)?;
     info!(
         "Handling message at offset: {}, payload: {}...",
-        message.offset, payload
+        message.header.offset, payload
     );
     Ok(())
+}
+
+fn get_tcp_server_addr() -> String {
+    let default_server_addr = "127.0.0.1:8090".to_string();
+    let argument_name = env::args().nth(1);
+    let tcp_server_addr = env::args().nth(2);
+
+    if argument_name.is_none() && tcp_server_addr.is_none() {
+        default_server_addr
+    } else {
+        let argument_name = argument_name.unwrap();
+        if argument_name != "--tcp-server-address" {
+            panic!(
+                "Invalid argument {}! Usage: {} --tcp-server-address <server-address>",
+                argument_name,
+                env::args().next().unwrap()
+            );
+        }
+        let tcp_server_addr = tcp_server_addr.unwrap();
+        if tcp_server_addr.parse::<std::net::SocketAddr>().is_err() {
+            panic!(
+                "Invalid server address {}! Usage: {} --tcp-server-address <server-address>",
+                tcp_server_addr,
+                env::args().next().unwrap()
+            );
+        }
+        info!("Using server address: {}", tcp_server_addr);
+        tcp_server_addr
+    }
 }
