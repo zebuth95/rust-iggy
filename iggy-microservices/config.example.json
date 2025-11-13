@@ -1,0 +1,82 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8090,
+    "tcp_enabled": true,
+    "quic_enabled": false
+  },
+  "authentication": {
+    "username": "root",
+    "password": "iggy"
+  },
+  "streams": [
+    {
+      "id": 1,
+      "name": "user-events",
+      "topics": [
+        {
+          "id": 1,
+          "name": "user-registrations",
+          "partitions_count": 2,
+          "message_expiry": null,
+          "max_topic_size": null
+        },
+        {
+          "id": 2,
+          "name": "user-actions",
+          "partitions_count": 1,
+          "message_expiry": null,
+          "max_topic_size": null
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "order-events",
+      "topics": [
+        {
+          "id": 1,
+          "name": "order-created",
+          "partitions_count": 1,
+          "message_expiry": null,
+          "max_topic_size": null
+        },
+        {
+          "id": 2,
+          "name": "order-updates",
+          "partitions_count": 1,
+          "message_expiry": null,
+          "max_topic_size": null
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "notifications",
+      "topics": [
+        {
+          "id": 1,
+          "name": "email-notifications",
+          "partitions_count": 1,
+          "message_expiry": null,
+          "max_topic_size": null
+        },
+        {
+          "id": 2,
+          "name": "push-notifications",
+          "partitions_count": 1,
+          "message_expiry": null,
+          "max_topic_size": null
+        }
+      ]
+    }
+  ],
+  "client": {
+    "poll_interval": 500,
+    "batch_size": 10,
+    "auto_create_streams": true,
+    "auto_create_topics": true,
+    "reconnect_attempts": 3,
+    "reconnect_delay": 1000
+  }
+}
